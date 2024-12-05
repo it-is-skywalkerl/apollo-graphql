@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 
 // types
 import { Destination } from "@/types";
+import { useMarkFavoriteMutation } from "@/hooks/useMarkFavoriteMutation";
 
 export const DestinationCard = ({
   destination,
@@ -15,11 +16,13 @@ export const DestinationCard = ({
   destination: Destination;
 }) => {
   const { id, name, favorite, location, rating } = destination;
-  const toggleFavorite = useCallback((event) => {
-    event.preventDefault();
-    // TODO: implement this
-    console.log("Unimplemented");
-  }, []);
+  const { markFavorite } = useMarkFavoriteMutation({
+    markFavoriteId: id,
+    value: favorite ? false : true,
+  });
+  const toggleFavorite = useCallback(() => {
+    markFavorite();
+  }, [favorite]);
 
   return (
     <Link key={id} href={`/destination/${id}`}>

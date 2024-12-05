@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { MapPin, Star, Edit, Heart, Trash2 as Trash } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast, Toaster } from "react-hot-toast";
+import { useMutation, gql } from "@apollo/client";
 
 // components
 import { Button } from "@/components/ui/button";
@@ -15,28 +16,110 @@ import { useDestinationByIdQuery } from "@/hooks/useDestinationByIdQuery";
 
 // types
 import { Destination } from "@/types";
+import { useRouter } from "next/router";
+import { useMarkFavoriteMutation } from "@/hooks/useMarkFavoriteMutation";
+
+const UPDATE_DESTINATION = gql`
+  mutation UpdateDestination(
+    $updateDestinationId: ID!
+    $task: DestinationDTO!
+  ) {
+    updateDestination(id: $updateDestinationId, task: $task)
+  }
+`;
+
+const DELETE_DESTINATION = gql`
+  mutation DeleteDestination($deleteDestinationId: ID!) {
+    deleteDestination(id: $deleteDestinationId) {
+      id
+    }
+  }
+`;
 
 export function Detail({ id }: { id: string }) {
+  const router = useRouter();
   const { destination, loading } = useDestinationByIdQuery({ id });
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [updateDestination] = useMutation(UPDATE_DESTINATION, {
+    onCompleted: () => {
+      toast.success("Destination updated successfully!");
+      setIsModalOpen(false);
+    },
+    onError: () => {
+      toast.error("Failed to update destination!");
+    },
+  });
+  const [deleteDestination, { loading: deleteDestinationLoading }] =
+    useMutation(DELETE_DESTINATION, {
+      onCompleted: () => {
+        toast.success("Destination deleted successfully!");
+        setIsModalOpen(false);
+      },
+      onError: () => {
+        toast.error("Failed to delete destination!");
+      },
+    });
 
   const isFavorite = destination?.favorite;
 
+  const { markFavorite } = useMarkFavoriteMutation({
+    markFavoriteId: id,
+    value: isFavorite ? false : true,
+  });
+
   const onSubmit = useCallback((_values: Partial<Destination>) => {
     // TODO: call destination mutation here
+    updateDestination({
+      variables: {
+        updateDestinationId: id,
+        task: _values,
+      },
+      optimisticResponse: {
+        data: {
+          updateDestination: true,
+        },
+      },
+      update: (cache) => {
+        const _destinationId = cache.identify({
+          id: id,
+          __typename: "Destination",
+        });
+        cache.modify({
+          id: _destinationId,
+          fields: Object.keys(_values).reduce((acc, key) => {
+            acc[key] = () => _values[key];
+            return acc;
+          }, {}),
+        });
+      },
+    });
     setIsModalOpen(false);
-    toast.error("Unhandled!");
   }, []);
 
   const handleDelete = useCallback(() => {
     // TODO: call destination mutation here
-    toast.error("Unhandled!");
+    deleteDestination({
+      variables: { deleteDestinationId: id },
+      optimisticResponse: {
+        data: {
+          deleteDestination: {
+            id: id,
+          },
+        },
+      },
+      update(cache) {
+        const cacheId = "ROOT_QUERY";
+        cache.evict({ id: cacheId });
+        cache.gc();
+      },
+    });
+    if (!deleteDestinationLoading) router.push("/");
   }, []);
 
   const toggleFavorite = useCallback(() => {
     // TODO: add handling for favorite here
-    toast.success(isFavorite ? "Removed from favorites" : "Added to favorites");
-  }, [isFavorite]);
+    markFavorite();
+  }, []);
 
   if (loading) {
     return <Tombstone />;

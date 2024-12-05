@@ -63,7 +63,7 @@ export const removeDestination = (id) => {
     throw new Error("No Destination!");
   }
 
-  writeFileSync(
+  writeDestinations(
     currentDestinations.filter((destination) => destination.id !== id)
   );
   return destination;

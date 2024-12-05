@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import { Dialog, DialogTrigger } from "@radix-ui/react-dialog";
 import toast from "react-hot-toast";
+import { gql, useLazyQuery, useMutation } from "@apollo/client";
 
 // components
 import { DestinationForm } from "@/components/DestinationForm";
@@ -11,15 +12,55 @@ import { Button } from "@/components/ui/button";
 
 // types
 import { Destination } from "@/types";
+import { useRouter } from "next/navigation";
+
+const ADD_DESTINATION = gql`
+  mutation createDestination($task: DestinationDTO!) {
+    createDestination(task: $task)
+  }
+`;
+const GET_DESTINATIONS_COUNT = gql`
+  query Destinations($page: Int!, $size: Int!) {
+    destinations(page: $page, size: $size) {
+      totalCount
+    }
+  }
+`;
 
 export const Header = (): JSX.Element => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [addDestination, { data, loading, error }] =
+    useMutation(ADD_DESTINATION);
+  const [
+    getDestinationsCount,
+    { data: destinationsData, loading: destinationsLoading },
+  ] = useLazyQuery(GET_DESTINATIONS_COUNT);
+  const router = useRouter();
 
-  const onSubmit = useCallback((_values: Partial<Destination>) => {
+  const onSubmit = async (_values: Partial<Destination>) => {
     // TODO: call destination mutation here and redirect to it's page
-    setIsModalOpen(false);
-    toast.error("Unhandled!");
-  }, []);
+    await addDestination({
+      variables: {
+        task: {
+          description: _values.description,
+          location: _values.location,
+          name: _values.name,
+          rating: _values.rating,
+        },
+      },
+      onCompleted: async () => {
+        toast.success("Destination added");
+        const destinationsData = await getDestinationsCount({
+          variables: { page: 1, size: 1 },
+        });
+        router.push(`/destination/${destinationsData.data.destinations.totalCount}`);
+      },
+      onError: (error) => {
+        toast.error("Could not add destination, please try again");
+        console.error(error);
+      },
+    });
+  };
 
   return (
     <div className="flex gap-4 items-center p-5 bg-white rounded-2xl justify-between border">
